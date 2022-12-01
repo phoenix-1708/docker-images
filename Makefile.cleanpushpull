@@ -1,0 +1,33 @@
+# Copyright (c) 2016-2022 Crave.io Inc. All rights reserved
+# This template must only be included by the actual image building makefile
+
+clean:
+	-${DOCKER} rm $$(${DOCKER} ps -aq)
+	-${DOCKER} images | \
+		awk '{ if ($$1 == "$(IMGTAG)" && $$2 == "$(IMGVER)") { print $$1":"$$2 } }' | \
+		while read line ; do ${DOCKER} rmi $$line ; done
+	-${DOCKER} images | \
+		grep '<none>' | \
+		awk '{ print $$3 }' | \
+		while read line ; do ${DOCKER} rmi $$line ; done
+
+push:
+	${DOCKER} push $(IMGTAG):$(IMGVER)
+
+pull:
+	${DOCKER} pull $(IMGTAG):$(IMGVER)
+
+tag-latest:
+	${DOCKER} tag $(IMGTAG):$(IMGVER) $(IMGTAG):latest
+
+it:
+	${DOCKER} run \
+		--rm -it \
+		${DOCKER_RUN_FLAGS} \
+		$(IMGTAG):$(IMGVER) \
+		$(DOCKER_RUN_CMD)
+
+help:
+	@echo "Usage"
+	@echo "make [clean|push|pull|tag-latest|it]"
+	@echo "make build [NOCACHE=y]"

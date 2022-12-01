@@ -1,0 +1,65 @@
+# Copyright (c) 2016-2022 Crave.io Inc. All rights reserved
+# This template must only be included by the actual image building makefile
+
+CONTEXT_DIR?=.
+DOCKERFILE?=$(CONTEXT_DIR)/Dockerfile
+
+ifdef SQUASH
+DOCKER_BUILD_FLAGS:=--squash
+else
+DOCKER_BUILD_FLAGS:=
+endif
+
+DOCKER_RUN_FLAGS:=
+DOCKER_RUN_CMD:=
+
+ifdef WINDOWS
+	DOCKER:=docker.exe
+	DOCKER_BUILD_FLAGS+=--isolation=hyperv
+	DOCKER_RUN_FLAGS+=--isolation=hyperv
+	DOCKER_RUN_CMD+=powershell.exe
+
+	DOCKER_INT_CTR_NAME=$(shell echo '$(IMGTAG)_$(IMGVER)' | sed 's|/|_|g' | sed 's|:|_|g')
+else
+	DOCKER:=docker
+	DOCKER_RUN_FLAGS+=-v ~/:/tmp/home
+	DOCKER_RUN_CMD+=/bin/bash
+endif
+
+ifdef NOCACHE
+	CACHE_FLAG:=--no-cache
+else
+	CACHE_FLAG:=
+endif
+
+build:
+ifdef dockerfile_git
+	${DOCKER} build \
+		${CACHE_FLAG} \
+		${DOCKER_BUILD_FLAGS} \
+		-f $(DOCKERFILE) \
+		--build-arg BUILD_DATE=`date -u +"%Y-%m-%dT%H:%M:%SZ"` \
+		--build-arg VCS_REF=$(dockerfile_git) \
+		${DOCKER_EXTRA_ARGS} \
+		-t $(IMGTAG):$(IMGVER) \
+		$(CONTEXT_DIR)
+else
+	${DOCKER} build \
+		${CACHE_FLAG} \
+		${DOCKER_BUILD_FLAGS} \
+		-f $(DOCKERFILE) \
+		${DOCKER_EXTRA_ARGS} \
+		-t $(IMGTAG):$(IMGVER) \
+		$(CONTEXT_DIR)
+endif
+ifdef WINDOWS
+	${DOCKER} rm -f ${DOCKER_INT_CTR_NAME}
+	${DOCKER} run -i \
+		--name ${DOCKER_INT_CTR_NAME} \
+		$(IMGTAG):$(IMGVER) \
+		sfc /scannow
+	${DOCKER} commit ${DOCKER_INT_CTR_NAME} $(IMGTAG):$(IMGVER)
+	${DOCKER} rm -f ${DOCKER_INT_CTR_NAME} 
+endif
+
+include $(shell git rev-parse --show-toplevel)/Makefile.cleanpushpull
